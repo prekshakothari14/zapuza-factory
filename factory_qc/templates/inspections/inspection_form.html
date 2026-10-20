@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}New Inspection — FactoryQC{% endblock %}
+{% block page_title %}New Inspection{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline btn-sm" href="{% url 'inspections:checklist_list' %}"><i class="bi bi-clock-history"></i> History</a>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Record Part Inspection</h1>
+    <p class="subtitle">Fill in all measurements to complete the quality checklist</p>
+  </div>
+</div>
+
+<div id="validation-alert" class="alert alert-danger d-none" role="alert">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  <div><strong>Submission blocked.</strong> All fields must be completed.</div>
+</div>
+<div id="gauge-alert" class="alert alert-danger d-none" role="alert">
+  <i class="bi bi-tools"></i>
+  <div><strong>Expired Tool Calibration.</strong> Obtain a calibrated tool from the tool crib.</div>
+</div>
+
+<form method="post" id="inspection-form" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+
+  <div class="fq-card mb-4">
+    <div class="fq-card-header">
+      <h2 class="fq-card-title"><i class="bi bi-sliders"></i> Inspection Setup</h2>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-5">
+        <label class="form-label" for="template-select">Approved Template <span style="color:var(--fail)">*</span></label>
+        <select class="form-select" id="template-select" name="template" required>
+          <option value="">— Choose template —</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}" {% if selected_template_id == t.id %}selected{% endif %}>
+            {{ t.part.part_no }} — {{ t.name }} ({{ t.revision }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="machine-select">Machine <span style="color:var(--fail)">*</span></label>
+        <select class="form-select" id="machine-select" name="machine" required>
+          <option value="">— Choose machine —</option>
+          {% for m in machines %}
+          <option value="{{ m.id }}" {% if selected_machine_id == m.id %}selected{% endif %}>{{ m.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="job-no-input">Job No <span style="color:var(--fail)">*</span></label>
+        <input class="form-control font-mono" type="text" id="job-no-input" name="job_no"
+               value="{{ selected_job_no|default:'' }}" placeholder="JOB-1001" required>
+      </div>
+    </div>
+    <div class="mt-3" id="template-subtitle" style="color:var(--muted);font-size:0.875rem;">
+      Select a template to load characteristics
+    </div>
+    <div id="fields-progress" class="d-none mt-2">
+      <div class="d-flex justify-content-between small mb-1">
+        <span id="progress-label">0 of 0 fields completed</span>
+        <span id="summary-pill" class="pill pill-pending d-none">In progress</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progress-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div id="no-template-placeholder" class="fq-card empty-state mb-4">
+    <i class="bi bi-clipboard2-data"></i>
+    <h3>Select a template</h3>
+    <p>Choose an approved inspection template above to load its characteristics.</p>
+  </div>
+
+  <div id="fields-table-container" class="d-none mb-4">
+    <div id="fields-tbody"></div>
+  </div>
+
+  <div class="submit-bar">
+    <div class="small text-muted d-none d-md-block">All fields required. Failed fields need ≥2 defect photos.</div>
+    <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+      <i class="bi bi-send-check"></i> Submit Checklist
+    </button>
+  </div>
+</form>
+
+{{ catalog_block }}
+<script id="catalog-data" type="application/json">{{ template_catalog_json|safe }}</script>
+<script id="gauges-data" type="application/json">
+[
+  {% for g in gauges %}
+  {
+    "id": {{ g.id }},
+    "serial_no": "{{ g.serial_no|escapejs }}",
+    "gauge_type": "{{ g.gauge_type|escapejs }}",
+    "is_valid": {% if g.is_calibration_valid %}true{% else %}false{% endif %}
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const catalog = JSON.parse(document.getElementById("catalog-data").textContent);
+  const gauges = JSON.parse(document.getElementById("gauges-data").textContent);
+
+  const templateSelect = document.getElementById("template-select");
+  const fieldsTableContainer = document.getElementById("fields-table-container");
+  const noTemplatePlaceholder = document.getElementById("no-template-placeholder");
+  const fieldsTbody = document.getElementById("fields-tbody");
+  const templateSubtitle = document.getElementById("template-subtitle");
+  const summaryPill = document.getElementById("summary-pill");
+  const fieldsProgress = document.getElementById("fields-progress");
+  const progressLabel = document.getElementById("progress-label");
+  const progressBar = document.getElementById("progress-bar");
+  const validationAlert = document.getElementById("validation-alert");
+  const gaugeAlert = document.getElementById("gauge-alert");
+  const form = document.getElementById("inspection-form");
+
+  const submittedData = {
+    {% if submitted_data %}
+      {% for k, v in submitted_data.items %}
+        "{{ k|escapejs }}": "{{ v|escapejs }}",
+      {% endfor %}
+    {% endif %}
+  };
+
+  function checkGaugeValidity(selectEl) {
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const isExpired = selectedOption && selectedOption.dataset.expired === "true";
+    if (isExpired) {
+      selectEl.classList.add("input-fail");
+      gaugeAlert.classList.remove("d-none");
+    } else {
+      selectEl.classList.remove("input-fail");
+      let anyExpired = false;
+      document.querySelectorAll(".gauge-select").forEach(gs => {
+        const opt = gs.options[gs.selectedIndex];
+        if (opt && opt.dataset.expired === "true") anyExpired = true;
+      });
+      if (!anyExpired) gaugeAlert.classList.add("d-none");
+    }
+  }
+
+  function evaluateInput(input) {
+    const fieldType = input.dataset.type;
+    const fieldId = input.dataset.fieldId;
+    const val = input.value.trim();
+    const card = input.closest(".field-card");
+    const resultEl = card.querySelector(".field-result");
+    const defectContainer = document.getElementById(`defect-photos-${fieldId}`);
+
+    if (val === "") {
+      input.classList.remove("input-pass", "input-fail");
+      card.classList.remove("pass", "fail");
+      if (resultEl) resultEl.innerHTML = "";
+      if (defectContainer) defectContainer.classList.add("d-none");
+      return null;
+    }
+
+    let passes = false;
+    let detail = "";
+    if (fieldType === "DIMENSION") {
+      const numVal = parseFloat(val);
+      const nominal = parseFloat(input.dataset.nominal);
+      const lowerTol = parseFloat(input.dataset.lower);
+      const upperTol = parseFloat(input.dataset.upper);
+      const minVal = nominal + lowerTol;
+      const maxVal = nominal + upperTol;
+      passes = !isNaN(numVal) && (numVal >= (minVal - 1e-9)) && (numVal <= (maxVal + 1e-9));
+      if (!passes && !isNaN(numVal)) {
+        if (numVal > maxVal) detail = ` (+${(numVal - maxVal).toFixed(3)} over)`;
+        else detail = ` (${(minVal - numVal).toFixed(3)} under)`;
+      }
+    } else if (fieldType === "MAX_THRESHOLD") {
+      const numVal = parseFloat(val);
+      const maxV = parseFloat(input.dataset.max);
+      passes = !isNaN(numVal) && numVal <= (maxV + 1e-9);
+      if (!passes && !isNaN(numVal)) detail = ` (+${(numVal - maxV).toFixed(3)} over max)`;
+    } else if (fieldType === "VISUAL") {
+      passes = val.toLowerCase() === "yes" || val === "true" || val === "1";
+    }
+
+    if (passes) {
+      input.classList.add("input-pass");
+      input.classList.remove("input-fail");
+      card.classList.add("pass");
+      card.classList.remove("fail");
+      if (resultEl) resultEl.innerHTML = '<span class="field-result pass"><i class="bi bi-check-circle-fill"></i> Within tolerance</span>';
+      if (defectContainer) defectContainer.classList.add("d-none");
+    } else {
+      input.classList.add("input-fail");
+      input.classList.remove("input-pass");
+      card.classList.add("fail");
+      card.classList.remove("pass");
+      if (resultEl) resultEl.innerHTML = `<span class="field-result fail"><i class="bi bi-x-circle-fill"></i> Out of tolerance${detail}</span>`;
+      if (defectContainer) defectContainer.classList.remove("d-none");
+    }
+    return passes;
+  }
+
+  function updateOverallProgress() {
+    const inputs = fieldsTbody.querySelectorAll(".measurement-input");
+    const total = inputs.length;
+    let filled = 0, passed = 0, failed = 0;
+    inputs.forEach(inp => {
+      if (inp.value.trim() !== "") {
+        filled++;
+        const r = evaluateInput(inp);
+        if (r === true) passed++;
+        else if (r === false) failed++;
+      }
+    });
+    progressLabel.textContent = `${filled} of ${total} fields completed`;
+    const pct = total ? Math.round((filled / total) * 100) : 0;
+    progressBar.style.width = pct + "%";
+    if (filled === total && total > 0) {
+      summaryPill.classList.remove("d-none", "pill-pending");
+      if (failed === 0) {
+        summaryPill.className = "pill pill-approved";
+        summaryPill.textContent = "All pass";
+      } else {
+        summaryPill.className = "pill pill-fail";
+        summaryPill.textContent = failed + " fail";
+      }
+    } else {
+      summaryPill.className = "pill pill-pending";
+      summaryPill.textContent = "In progress";
+      if (total) summaryPill.classList.remove("d-none");
+    }
+  }
+
+  function renderTemplateFields(templateId) {
+    fieldsTbody.innerHTML = "";
+    if (!templateId || !catalog[templateId]) {
+      fieldsTableContainer.classList.add("d-none");
+      noTemplatePlaceholder.classList.remove("d-none");
+      fieldsProgress.classList.add("d-none");
+      templateSubtitle.textContent = "Select a template above to view inspection characteristics";
+      return;
+    }
+
+    const tData = catalog[templateId];
+    templateSubtitle.innerHTML = `Part: <strong>${tData.part_no}</strong> ${tData.part_desc ? '('+tData.part_desc+')' : ''} · Rev: <strong>${tData.revision}</strong>`;
+    noTemplatePlaceholder.classList.add("d-none");
+    fieldsTableContainer.classList.remove("d-none");
+    fieldsProgress.classList.remove("d-none");
+
+    tData.fields.forEach((f, idx) => {
+      const needsGauge = (f.field_type === 'DIMENSION' || f.field_type === 'MAX_THRESHOLD');
+      const gaugePlaceholder = needsGauge
+        ? '— Select gauge (required) —'
+        : '— Select gauge (optional) —';
+      let gaugeOptions = `<option value="" data-expired="false">${gaugePlaceholder}</option>`;
+      gauges.forEach(g => {
+        const selectedAttr = (submittedData[`field_${f.id}_gauge`] == g.id) ? 'selected' : '';
+        const expiredLabel = g.is_valid ? '' : ' (EXPIRED)';
+        const expiredData = g.is_valid ? 'false' : 'true';
+        gaugeOptions += `<option value="${g.id}" data-expired="${expiredData}" ${selectedAttr}>${g.serial_no} (${g.gauge_type})${expiredLabel}</option>`;
+      });
+
+      const ctqBadge = f.is_ctq ? '<span class="pill pill-ctq-tag">CTQ</span>' : '';
+      let rangePill = '';
+      if (f.field_type === 'DIMENSION') {
+        const minV = (parseFloat(f.nominal) + parseFloat(f.lower_tol)).toFixed(3);
+        const maxV = (parseFloat(f.nominal) + parseFloat(f.upper_tol)).toFixed(3);
+        rangePill = `<span class="pill pill-range">${minV} – ${maxV}${f.unit ? ' '+f.unit : ''}</span>`;
+      } else if (f.field_type === 'MAX_THRESHOLD') {
+        rangePill = `<span class="pill pill-range">≤ ${parseFloat(f.max_value).toFixed(3)}${f.unit ? ' '+f.unit : ''}</span>`;
+      } else {
+        rangePill = `<span class="pill pill-range">Yes</span>`;
+      }
+
+      let inputHtml = '';
+      if (f.field_type === 'DIMENSION') {
+        const curVal = submittedData[`field_${f.id}_value`] || '';
+        inputHtml = `<input type="number" step="any" name="field_${f.id}_value" value="${curVal}"
+          class="form-control form-control-lg measurement-input" placeholder="Measured value"
+          data-type="DIMENSION" data-nominal="${f.nominal}" data-lower="${f.lower_tol}" data-upper="${f.upper_tol}"
+          data-field-id="${f.id}" data-name="${f.name}" required>`;
+      } else if (f.field_type === 'MAX_THRESHOLD') {
+        const curVal = submittedData[`field_${f.id}_value`] || '';
+        inputHtml = `<input type="number" step="any" name="field_${f.id}_value" value="${curVal}"
+          class="form-control form-control-lg measurement-input" placeholder="Measured value"
+          data-type="MAX_THRESHOLD" data-max="${f.max_value}"
+          data-field-id="${f.id}" data-name="${f.name}" required>`;
+      } else {
+        const curVal = (submittedData[`field_${f.id}_visual_ok`] || '').toLowerCase();
+        inputHtml = `<select name="field_${f.id}_visual_ok" class="form-select form-control-lg measurement-input"
+          data-type="VISUAL" data-field-id="${f.id}" data-name="${f.name}" required>
+          <option value="">— Select —</option>
+          <option value="yes" ${curVal==='yes'||curVal==='true'?'selected':''}>Yes (OK)</option>
+          <option value="no" ${curVal==='no'||curVal==='false'?'selected':''}>No (Defect)</option>
+        </select>`;
+      }
+
+      const card = document.createElement("div");
+      card.className = "field-card";
+      card.innerHTML = `
+        <div class="field-card-head">
+          <span class="fname">${idx+1}. ${f.name}</span>
+          ${ctqBadge}
+          ${rangePill}
+        </div>
+        <div class="row g-3 align-items-start">
+          <div class="col-md-5">${inputHtml}<div class="field-result"></div></div>
+          <div class="col-md-4">
+            <label class="form-label small">Gauge</label>
+            <select name="field_${f.id}_gauge" class="form-select gauge-select" data-field-id="${f.id}" data-field-name="${f.name}" data-requires-gauge="${needsGauge ? 'true' : 'false'}">${gaugeOptions}</select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Remarks</label>
+            <input type="text" name="field_${f.id}_remarks" class="form-control"
+                   value="${submittedData[`field_${f.id}_remarks`]||''}" placeholder="Optional">
+          </div>
+        </div>
+        <div class="photo-drop defect-photos-container d-none" id="defect-photos-${f.id}">
+          <i class="bi bi-camera"></i>
+          <div class="fw-semibold mb-1">Defect photos required</div>
+          <div class="small text-muted mb-1">JPG, PNG or WebP · max 5 MB each</div>
+          <div class="photo-counter small fw-semibold mb-2" id="photo-counter-${f.id}" data-field-id="${f.id}">0 of 2 required</div>
+          <input type="file" name="field_${f.id}_photos" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple
+                 class="form-control defect-photo-file" data-field-id="${f.id}">
+          <div class="small text-muted mt-1">You can add photos one at a time.</div>
+          <div class="photo-preview-row d-flex flex-wrap gap-2 mt-2" id="photo-preview-${f.id}"></div>
+        </div>
+      `;
+      fieldsTbody.appendChild(card);
+    });
+
+    fieldsTbody.querySelectorAll(".measurement-input").forEach(inp => {
+      inp.addEventListener("input", () => { evaluateInput(inp); updateOverallProgress(); });
+      inp.addEventListener("change", () => { evaluateInput(inp); updateOverallProgress(); });
+      if (inp.value.trim()) evaluateInput(inp);
+    });
+    fieldsTbody.querySelectorAll(".gauge-select").forEach(gs => {
+      gs.addEventListener("change", () => checkGaugeValidity(gs));
+      checkGaugeValidity(gs);
+    });
+    // Accumulate files across multiple picks (browser replaces input.files each time).
+    fieldsTbody.querySelectorAll(".defect-photo-file").forEach(fi => {
+      fi._photoDt = new DataTransfer();
+      fi.addEventListener("change", () => onDefectPhotoChange(fi));
+    });
+    updateOverallProgress();
+  }
+
+  function fileKey(file) {
+    return file.name + "|" + file.size + "|" + file.lastModified;
+  }
+
+  function syncDefectPhotos(fileInput) {
+    const fieldId = fileInput.dataset.fieldId;
+    const preview = document.getElementById("photo-preview-" + fieldId);
+    const counter = document.getElementById("photo-counter-" + fieldId);
+    const dt = fileInput._photoDt || new DataTransfer();
+    fileInput._photoDt = dt;
+    fileInput.files = dt.files;
+
+    const files = Array.from(dt.files);
+    const count = files.length;
+    if (counter) {
+      counter.textContent = count + " of 2 required";
+      counter.style.color = count >= 2 ? "var(--pass)" : "var(--fail)";
+    }
+    if (!preview) return;
+    preview.innerHTML = "";
+    files.forEach(function(file, i) {
+      const wrap = document.createElement("div");
+      wrap.className = "photo-thumb-wrap";
+      wrap.style.cssText = "position:relative;display:inline-block;";
+      if (file.type && file.type.startsWith("image/")) {
+        const url = URL.createObjectURL(file);
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Preview " + (i + 1);
+        img.className = "photo-thumb";
+        img.title = file.name;
+        wrap.appendChild(img);
+      } else {
+        const label = document.createElement("span");
+        label.className = "small";
+        label.textContent = file.name;
+        wrap.appendChild(label);
+      }
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "btn btn-sm photo-remove";
+      rm.setAttribute("aria-label", "Remove photo");
+      rm.textContent = "×";
+      rm.style.cssText = "position:absolute;top:2px;right:2px;line-height:1;padding:0 5px;border-radius:50%;background:#DC2626;color:#fff;border:none;font-size:14px;cursor:pointer;";
+      rm.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        removeDefectPhoto(fileInput, i);
+      });
+      wrap.appendChild(rm);
+      preview.appendChild(wrap);
+    });
+  }
+
+  function onDefectPhotoChange(fileInput) {
+    if (!fileInput._photoDt) fileInput._photoDt = new DataTransfer();
+    const dt = fileInput._photoDt;
+    const existing = new Set(Array.from(dt.files).map(fileKey));
+    Array.from(fileInput.files || []).forEach(function(file) {
+      const key = fileKey(file);
+      if (existing.has(key)) return;
+      dt.items.add(file);
+      existing.add(key);
+    });
+    syncDefectPhotos(fileInput);
+  }
+
+  function removeDefectPhoto(fileInput, index) {
+    const dt = fileInput._photoDt || new DataTransfer();
+    const next = new DataTransfer();
+    Array.from(dt.files).forEach(function(file, i) {
+      if (i !== index) next.items.add(file);
+    });
+    fileInput._photoDt = next;
+    syncDefectPhotos(fileInput);
+  }
+
+  function updatePhotoPreview(fileInput) {
+    syncDefectPhotos(fileInput);
+  }
+
+  templateSelect.addEventListener("change", () => renderTemplateFields(templateSelect.value));
+  if (templateSelect.value) renderTemplateFields(templateSelect.value);
+
+  form.addEventListener("submit", function(e) {
+    validationAlert.classList.add("d-none");
+    const errors = [];
+    let firstEmpty = null;
+    const inputs = fieldsTbody.querySelectorAll(".measurement-input");
+
+    inputs.forEach(inp => {
+      if (inp.value.trim() === "") {
+        errors.push(`Field "<strong>${inp.dataset.name||'Field'}</strong>" cannot be empty.`);
+        inp.classList.add("input-fail");
+        if (!firstEmpty) firstEmpty = inp;
+      }
+    });
+
+    document.querySelectorAll(".gauge-select").forEach(gs => {
+      if (gs.dataset.requiresGauge === "true" && !gs.value) {
+        const fname = gs.dataset.fieldName || "field";
+        errors.push(`Select the gauge used for '<strong>${fname}</strong>'`);
+        gs.classList.add("input-fail");
+        if (!firstEmpty) firstEmpty = gs;
+      }
+    });
+
+    let expiredGaugeFound = false;
+    document.querySelectorAll(".gauge-select").forEach(gs => {
+      const opt = gs.options[gs.selectedIndex];
+      if (opt && opt.dataset.expired === "true") {
+        expiredGaugeFound = true;
+        gs.classList.add("input-fail");
+      }
+    });
+    if (expiredGaugeFound) {
+      errors.push("<strong>Expired Tool Calibration. Obtain a calibrated tool from the tool crib.</strong>");
+      gaugeAlert.classList.remove("d-none");
+    }
+
+    inputs.forEach(inp => {
+      const fieldId = inp.dataset.fieldId;
+      const passes = evaluateInput(inp);
+      if (passes === false) {
+        const fileInputs = document.querySelectorAll(`[data-field-id="${fieldId}"].defect-photo-file`);
+        let totalFiles = 0;
+        fileInputs.forEach(fi => { if (fi.files) totalFiles += fi.files.length; });
+        if (totalFiles < 2) {
+          errors.push(`Upload at least 2 photos for '<strong>${inp.dataset.name}</strong>' (${totalFiles} uploaded)`);
+          const defectBox = document.getElementById(`defect-photos-${fieldId}`);
+          if (defectBox) defectBox.classList.remove("d-none");
+        }
+      }
+    });
+
+    if (errors.length > 0) {
+      e.preventDefault();
+      validationAlert.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i><div><strong>Submission blocked:</strong><ul class="mb-0 mt-1">${errors.map(err=>'<li>'+err+'</li>').join('')}</ul></div>`;
+      validationAlert.classList.remove("d-none");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (firstEmpty) firstEmpty.focus();
+    }
+  });
+});
+</script>
+{% endblock %}

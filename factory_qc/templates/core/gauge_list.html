@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — FactoryQC{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">Calibration status of measurement tools</p>
+  </div>
+  <a class="btn btn-primary" href="{% url create_url_name %}"><i class="bi bi-plus-lg"></i> Add Gauge</a>
+</div>
+
+{% if rows %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Serial No</th>
+        <th>Type</th>
+        <th>Calibration Expiry</th>
+        <th>Days Left</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% with g=row.obj %}
+      <tr>
+        <td class="fw-semibold font-mono">{{ g.serial_no }}</td>
+        <td>{{ g.gauge_type }}</td>
+        <td>{{ g.calibration_expiry }}</td>
+        <td class="font-mono">{{ g.days_left }}</td>
+        <td>
+          {% if not g.is_calibration_valid %}
+            <span class="pill pill-expired"><i class="bi bi-x-circle"></i> Expired</span>
+          {% elif g.days_left <= 7 %}
+            <span class="pill pill-expiring"><i class="bi bi-exclamation-triangle"></i> Expiring soon</span>
+          {% else %}
+            <span class="pill pill-valid"><i class="bi bi-check-circle"></i> Valid</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <a class="btn btn-outline btn-sm" href="{% url edit_url_name g.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+        </td>
+      </tr>
+      {% endwith %}
+      {% empty %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-rulers"></i>
+  <h3>No gauges registered</h3>
+  <p>Add gauges so inspectors can record measurements.</p>
+  <a class="btn btn-primary" href="{% url create_url_name %}"><i class="bi bi-plus-lg"></i> Add Gauge</a>
+</div>
+{% endif %}
+{% endblock %}

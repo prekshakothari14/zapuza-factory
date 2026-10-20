@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — FactoryQC{% endblock %}
+{% block page_title %}Audit Log{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Audit Log</h1>
+    <p class="subtitle">Immutable trail of create, update, and delete actions</p>
+  </div>
+</div>
+
+<form method="get" class="filters-bar">
+  <div style="min-width:160px;">
+    <label class="form-label">Model</label>
+    <select name="model" class="form-select">
+      <option value="">All models</option>
+      {% for m in model_choices %}
+      <option value="{{ m }}" {% if filters.model == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="min-width:140px;">
+    <label class="form-label">User</label>
+    <select name="user" class="form-select">
+      <option value="">All users</option>
+      <option value="system" {% if filters.user == "system" %}selected{% endif %}>system</option>
+      {% for u in user_choices %}
+      <option value="{{ u.id }}" {% if filters.user == u.id|stringformat:"s" %}selected{% endif %}>{{ u.username }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="min-width:120px;">
+    <label class="form-label">Action</label>
+    <select name="action" class="form-select">
+      <option value="">All actions</option>
+      {% for code, label in action_choices %}
+      <option value="{{ code }}" {% if filters.action == code %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="min-width:140px;">
+    <label class="form-label">From</label>
+    <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}">
+  </div>
+  <div style="min-width:140px;">
+    <label class="form-label">To</label>
+    <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}">
+  </div>
+  <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Filter</button>
+  <a href="{% url 'audit:log_list' %}" class="btn btn-outline">Clear</a>
+</form>
+
+{% if logs %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>User</th>
+        <th>Action</th>
+        <th>Model</th>
+        <th>Object</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td class="small text-muted font-mono">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+        <td class="fw-semibold">{{ log.username }}</td>
+        <td>
+          {% if log.action == "CREATE" %}<span class="pill pill-pass">CREATE</span>
+          {% elif log.action == "UPDATE" %}<span class="pill" style="background:#DBEAFE;color:#1E40AF;">UPDATE</span>
+          {% elif log.action == "DELETE" %}<span class="pill pill-fail">DELETE</span>
+          {% else %}<span class="pill pill-draft">{{ log.action }}</span>{% endif %}
+        </td>
+        <td class="small font-mono">{{ log.model_name }}</td>
+        <td>
+          <div class="fw-semibold">{{ log.object_repr|truncatechars:60 }}</div>
+          <small class="text-muted">#{{ log.object_id }}</small>
+        </td>
+        <td class="text-end">
+          <button type="button" class="btn btn-outline btn-sm btn-view-diff"
+                  data-bs-toggle="modal" data-bs-target="#diffModal"
+                  data-action="{{ log.action }}"
+                  data-model="{{ log.model_name }}"
+                  data-oid="{{ log.object_id }}"
+                  data-user="{{ log.username }}"
+                  data-time="{{ log.timestamp|date:'Y-m-d H:i:s' }}"
+                  data-ip="{{ log.ip_address|default:'' }}"
+                  data-old='{{ log.old_values_json }}'
+                  data-new='{{ log.new_values_json }}'
+                  data-fields='{{ log.changed_fields_json }}'>
+            <i class="bi bi-eye"></i> View changes
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<nav class="mt-3 d-flex justify-content-center gap-2">
+  {% if page_obj.has_previous %}
+  <a class="btn btn-outline btn-sm" href="?page={{ page_obj.previous_page_number }}&model={{ filters.model }}&user={{ filters.user }}&action={{ filters.action }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">« Prev</a>
+  {% endif %}
+  <span class="btn btn-outline btn-sm disabled">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+  <a class="btn btn-outline btn-sm" href="?page={{ page_obj.next_page_number }}&model={{ filters.model }}&user={{ filters.user }}&action={{ filters.action }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Next »</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-journal-text"></i>
+  <h3>No audit entries</h3>
+  <p>Changes to tracked models will appear here.</p>
+</div>
+{% endif %}
+
+<div class="modal fade" id="diffModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="diffTitle">Changes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-3" id="diffMeta"></div>
+        <div class="fq-table-wrap">
+          <table class="fq-table">
+            <thead><tr><th>Field</th><th>Old value</th><th>New value</th></tr></thead>
+            <tbody id="diffBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.btn-view-diff').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const action = btn.dataset.action;
+    const model = btn.dataset.model;
+    const oid = btn.dataset.oid;
+    document.getElementById('diffTitle').textContent = action + ' · ' + model + ' #' + oid;
+    let meta = (btn.dataset.time || '') + ' · ' + (btn.dataset.user || '');
+    if (btn.dataset.ip) meta += ' · ' + btn.dataset.ip;
+    document.getElementById('diffMeta').textContent = meta;
+
+    let oldV = {}, newV = {}, fields = [];
+    try { oldV = JSON.parse(btn.dataset.old || 'null') || {}; } catch(e) {}
+    try { newV = JSON.parse(btn.dataset.new || 'null') || {}; } catch(e) {}
+    try { fields = JSON.parse(btn.dataset.fields || '[]') || []; } catch(e) {}
+    if (!fields.length) {
+      fields = Array.from(new Set([...Object.keys(oldV), ...Object.keys(newV)]));
+    }
+    const body = document.getElementById('diffBody');
+    body.innerHTML = '';
+    if (!fields.length) {
+      body.innerHTML = '<tr><td colspan="3" class="text-muted">No field-level changes recorded.</td></tr>';
+      return;
+    }
+    fields.forEach(function(f) {
+      const tr = document.createElement('tr');
+      const oVal = oldV[f] === undefined || oldV[f] === null ? '—' : String(oldV[f]);
+      const nVal = newV[f] === undefined || newV[f] === null ? '—' : String(newV[f]);
+      tr.innerHTML =
+        '<td class="fw-semibold font-mono">' + f + '</td>' +
+        '<td><span style="background:var(--fail-bg);color:#991B1B;padding:2px 8px;border-radius:6px;font-family:ui-monospace,monospace;font-size:0.85rem;">' + oVal.replace(/</g,'&lt;') + '</span></td>' +
+        '<td><span style="background:var(--pass-bg);color:#166534;padding:2px 8px;border-radius:6px;font-family:ui-monospace,monospace;font-size:0.85rem;">' + nVal.replace(/</g,'&lt;') + '</span></td>';
+      body.appendChild(tr);
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — FactoryQC{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-primary" href="{% url create_url_name %}"><i class="bi bi-plus-lg"></i> Add</a>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">Master data management</p>
+  </div>
+  <a class="btn btn-primary" href="{% url create_url_name %}"><i class="bi bi-plus-lg"></i> Add</a>
+</div>
+
+{% if rows %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% for cell in row.cells %}
+        <td>
+          {% if cell == True %}<span class="pill pill-pass">Active</span>
+          {% elif cell == False %}<span class="pill pill-draft">Inactive</span>
+          {% else %}{{ cell }}{% endif %}
+        </td>
+        {% endfor %}
+        <td class="text-end">
+          <a class="btn btn-outline btn-sm" href="{% url edit_url_name row.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-inbox"></i>
+  <h3>Nothing here yet</h3>
+  <p>Add the first record to get started.</p>
+  <a class="btn btn-primary" href="{% url create_url_name %}"><i class="bi bi-plus-lg"></i> Add</a>
+</div>
+{% endif %}
+{% endblock %}

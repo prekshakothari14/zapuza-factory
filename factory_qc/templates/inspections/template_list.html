@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Inspection Templates — FactoryQC{% endblock %}
+{% block page_title %}Templates{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Inspection Templates</h1>
+    <p class="subtitle">Define characteristics and tolerances for each part</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'inspections:template_create' %}"><i class="bi bi-plus-lg"></i> New Template</a>
+</div>
+
+{% if templates %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Part</th>
+        <th>Revision</th>
+        <th>Status</th>
+        <th>Active</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in templates %}
+      <tr>
+        <td class="fw-semibold"><a href="{% url 'inspections:template_detail' t.pk %}">{{ t.name }}</a></td>
+        <td class="font-mono">{{ t.part.part_no }}</td>
+        <td>{{ t.revision }}</td>
+        <td>
+          {% if t.status == "APPROVED" %}<span class="pill pill-approved">Approved</span>
+          {% else %}<span class="pill pill-draft">Draft</span>{% endif %}
+        </td>
+        <td>{% if t.is_active %}<span class="pill pill-pass">Yes</span>{% else %}<span class="pill pill-draft">No</span>{% endif %}</td>
+        <td class="text-end"><a class="btn btn-outline btn-sm" href="{% url 'inspections:template_detail' t.pk %}">Open</a></td>
+      </tr>
+      {% empty %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-file-earmark-text"></i>
+  <h3>No templates</h3>
+  <p>Create an inspection template for a part number.</p>
+  <a class="btn btn-primary" href="{% url 'inspections:template_create' %}"><i class="bi bi-plus-lg"></i> New Template</a>
+</div>
+{% endif %}
+{% endblock %}

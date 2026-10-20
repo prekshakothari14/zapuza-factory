@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ template_obj.name }} — FactoryQC{% endblock %}
+{% block page_title %}Template Detail{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-11">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h1 class="mb-0" style="font-size:1.5rem;font-weight:800;">{{ template_obj.name }}</h1>
+          <span class="badge bg-secondary fs-6">{{ template_obj.revision }}</span>
+          {% if template_obj.is_approved %}
+            <span class="badge bg-success fs-6">APPROVED (Locked)</span>
+          {% else %}
+            <span class="badge bg-warning text-dark fs-6">DRAFT</span>
+          {% endif %}
+        </div>
+        <div class="text-muted small mt-1">Part: <strong>{{ template_obj.part.part_no }}</strong> - {{ template_obj.part.description }}</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline" href="{% url 'inspections:template_list' %}">← All Templates</a>
+        {% if not template_obj.is_approved %}
+          <a class="btn btn-primary" href="{% url 'inspections:template_edit' template_obj.pk %}">Edit Template</a>
+          <form method="post" action="{% url 'inspections:template_approve' template_obj.pk %}" class="d-inline" onsubmit="return confirm('Approve this template? Once approved, it can NEVER be edited.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success">✓ Approve Template</button>
+          </form>
+        {% else %}
+          <a class="btn btn-success" href="{% url 'inspections:inspection_create' %}?template={{ template_obj.pk }}">+ Start Inspection</a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if template_obj.is_approved %}
+    <div class="alert alert-info d-flex align-items-center mb-4">
+      <div>
+        <strong>Template is Approved & Locked:</strong> In accordance with quality management rules, approved templates cannot be modified to ensure inspection traceability and audit compliance.
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="fq-card mb-4">
+      <div class="fq-card-header py-3">
+        <h5 class="card-title mb-0">Inspection Fields & Tolerances ({{ fields|length }})</h5>
+      </div>
+      <div class="fq-table-wrap">
+        <table class="fq-table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Characteristic Name</th>
+              <th>Type</th>
+              <th>Nominal</th>
+              <th>Tolerance</th>
+              <th>Max Value</th>
+              <th>Unit</th>
+              <th>Expected Range</th>
+              <th class="text-center">CTQ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in fields %}
+            <tr>
+              <td><span class="text-muted small">{{ f.order }}</span></td>
+              <td>
+                <span class="fw-semibold">{{ f.name }}</span>
+              </td>
+              <td>
+                <span class="badge bg-light text-dark border">{{ f.get_field_type_display }}</span>
+              </td>
+              <td>
+                {% if f.nominal is not None %}{{ f.nominal }}{% else %}<span class="text-muted">-</span>{% endif %}
+              </td>
+              <td>
+                {% if f.field_type == "DIMENSION" %}
+                  <span class="badge bg-light text-dark font-monospace">
+                    {{ f.lower_tol|stringformat:"+0.3f" }} / {{ f.upper_tol|stringformat:"+0.3f" }}
+                  </span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if f.max_value is not None %}{{ f.max_value }}{% else %}<span class="text-muted">-</span>{% endif %}
+              </td>
+              <td>{{ f.unit|default:"-" }}</td>
+              <td>
+                <strong class="text-primary">{{ f.expected_range }}</strong>
+              </td>
+              <td class="text-center">
+                {% if f.is_ctq %}
+                  <span class="badge" style="background-color: #fd7e14; color: white;" title="Critical To Quality">CTQ</span>
+                {% else %}
+                  <span class="text-muted small">No</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-4">No fields added to this template yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

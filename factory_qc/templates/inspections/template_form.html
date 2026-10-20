@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — FactoryQC{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-11">
+    <div class="fq-card mb-4">
+      <div class="fq-card-header py-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <h1 class="h4 mb-0">{{ title }}</h1>
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'inspections:template_list' %}">← Back to Templates</a>
+        </div>
+      </div>
+      <div class="card-body">
+        <form method="post" id="template-form">
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+          </div>
+          {% endif %}
+
+          <h5 class="card-title text-secondary border-bottom pb-2 mb-3">Template Information</h5>
+          <div class="row g-3 mb-4">
+            <div class="col-md-5">
+              <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">Template Name</label>
+              {{ form.name }}
+              {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="{{ form.part.id_for_label }}">Part Number</label>
+              {{ form.part }}
+              {% for e in form.part.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold" for="{{ form.revision.id_for_label }}">Revision</label>
+              {{ form.revision }}
+              {% for e in form.revision.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-1 d-flex align-items-center pt-4">
+              <div class="form-check">
+                {{ form.is_active }}
+                <label class="form-check-label small" for="{{ form.is_active.id_for_label }}">Active</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+            <h5 class="card-title text-secondary mb-0">Inspection Fields / Characteristics</h5>
+            <small class="text-muted">Fields define tolerances and inspection criteria</small>
+          </div>
+
+          {{ formset.management_form }}
+          {% if formset.non_form_errors %}
+          <div class="alert alert-danger">
+            {% for e in formset.non_form_errors %}<div>{{ e }}</div>{% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="fq-table-wrap mb-3">
+            <table class="table table-bordered table-sm align-middle" id="fields-table">
+              <thead class="table-light">
+                <tr class="small text-center">
+                  <th style="width: 50px;">Order</th>
+                  <th style="min-width: 160px;">Characteristic Name</th>
+                  <th style="width: 140px;">Type</th>
+                  <th style="width: 95px;">Nominal</th>
+                  <th style="width: 95px;">Upper Tol (+)</th>
+                  <th style="width: 95px;">Lower Tol (-)</th>
+                  <th style="width: 95px;">Max Value</th>
+                  <th style="width: 80px;">Unit</th>
+                  <th style="width: 60px;">CTQ</th>
+                  {% if formset.can_delete %}<th style="width: 60px;">Del</th>{% endif %}
+                </tr>
+              </thead>
+              <tbody id="formset-tbody">
+                {% for fform in formset %}
+                <tr class="formset-row">
+                  <td>
+                    {% for hidden in fform.hidden_fields %}{{ hidden }}{% endfor %}
+                    {{ fform.order }}
+                    {% for e in fform.order.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.name }}
+                    {% for e in fform.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.field_type }}
+                    {% for e in fform.field_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.nominal }}
+                    {% for e in fform.nominal.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.upper_tol }}
+                    {% for e in fform.upper_tol.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.lower_tol }}
+                    {% for e in fform.lower_tol.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.max_value }}
+                    {% for e in fform.max_value.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td>
+                    {{ fform.unit }}
+                    {% for e in fform.unit.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  <td class="text-center">
+                    {{ fform.is_ctq }}
+                    {% for e in fform.is_ctq.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                  </td>
+                  {% if formset.can_delete %}
+                  <td class="text-center">
+                    {{ fform.DELETE }}
+                  </td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mb-4">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="add-field-btn">+ Add Field Row</button>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save Template</button>
+            <a class="btn btn-outline" href="{% url 'inspections:template_list' %}">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const addBtn = document.getElementById("add-field-btn");
+  const tbody = document.getElementById("formset-tbody");
+  const totalForms = document.getElementById("id_fields-TOTAL_FORMS");
+
+  // Highlight inputs based on field type
+  function updateRowInputs(row) {
+    const select = row.querySelector(".field-type-select");
+    if (!select) return;
+    const type = select.value;
+    const nominal = row.querySelector('input[name$="-nominal"]');
+    const upper = row.querySelector('input[name$="-upper_tol"]');
+    const lower = row.querySelector('input[name$="-lower_tol"]');
+    const maxVal = row.querySelector('input[name$="-max_value"]');
+
+    if (type === "DIMENSION") {
+      if (nominal) nominal.disabled = false;
+      if (upper) upper.disabled = false;
+      if (lower) lower.disabled = false;
+      if (maxVal) { maxVal.disabled = true; maxVal.value = ""; }
+    } else if (type === "MAX_THRESHOLD") {
+      if (nominal) { nominal.disabled = true; nominal.value = ""; }
+      if (upper) { upper.disabled = true; upper.value = ""; }
+      if (lower) { lower.disabled = true; lower.value = ""; }
+      if (maxVal) maxVal.disabled = false;
+    } else if (type === "VISUAL") {
+      if (nominal) { nominal.disabled = true; nominal.value = ""; }
+      if (upper) { upper.disabled = true; upper.value = ""; }
+      if (lower) { lower.disabled = true; lower.value = ""; }
+      if (maxVal) { maxVal.disabled = true; maxVal.value = ""; }
+    }
+  }
+
+  document.querySelectorAll(".formset-row").forEach(updateRowInputs);
+
+  document.addEventListener("change", function(e) {
+    if (e.target && e.target.classList.contains("field-type-select")) {
+      const row = e.target.closest("tr");
+      if (row) updateRowInputs(row);
+    }
+  });
+
+  if (addBtn && totalForms) {
+    addBtn.addEventListener("click", function() {
+      const currentCount = parseInt(totalForms.value, 10);
+      const rows = tbody.querySelectorAll(".formset-row");
+      if (rows.length === 0) return;
+
+      const lastRow = rows[rows.length - 1];
+      const newRow = lastRow.cloneNode(true);
+
+      // Update names and IDs
+      newRow.querySelectorAll("input, select").forEach(function(el) {
+        if (el.name) {
+          el.name = el.name.replace(/-\d+-/, `-${currentCount}-`);
+        }
+        if (el.id) {
+          el.id = el.id.replace(/-\d+-/, `-${currentCount}-`);
+        }
+        // Reset values
+        if (el.type === "checkbox") {
+          el.checked = false;
+        } else if (el.type === "hidden" && el.name.endsWith("-id")) {
+          el.value = "";
+        } else if (el.name && el.name.endsWith("-order")) {
+          el.value = currentCount + 1;
+        } else {
+          el.value = "";
+        }
+        el.disabled = false;
+      });
+
+      // Remove error texts
+      newRow.querySelectorAll(".text-danger").forEach(e => e.remove());
+
+      tbody.appendChild(newRow);
+      totalForms.value = currentCount + 1;
+      updateRowInputs(newRow);
+    });
+  }
+});
+</script>
+{% endblock %}

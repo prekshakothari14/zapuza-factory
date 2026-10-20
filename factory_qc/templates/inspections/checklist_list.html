@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Inspection Checklists — FactoryQC{% endblock %}
+{% block page_title %}Checklists{% endblock %}
+{% block topbar_actions %}
+{% if can_inspect %}<a class="btn btn-primary" href="{% url 'inspections:inspection_create' %}"><i class="bi bi-plus-lg"></i> New Inspection</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Inspection Checklists</h1>
+    <p class="subtitle">Audit history of completed quality inspections</p>
+  </div>
+  {% if can_inspect %}<a class="btn btn-primary" href="{% url 'inspections:inspection_create' %}"><i class="bi bi-plus-lg"></i> New Inspection</a>{% endif %}
+</div>
+
+{% if checklists %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Job No</th>
+        <th>Part / Template</th>
+        <th>Machine</th>
+        <th>Inspector</th>
+        <th>Status</th>
+        <th class="text-center">Result</th>
+        <th>Submitted</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in checklists %}
+      <tr>
+        <td class="fw-bold font-mono"><a href="{% url 'inspections:checklist_detail' c.pk %}">{{ c.job_no }}</a></td>
+        <td>
+          <div class="fw-semibold">{{ c.template.part.part_no }}</div>
+          <small class="text-muted">{{ c.template.name }} ({{ c.template.revision }})</small>
+        </td>
+        <td>{{ c.machine.name }}</td>
+        <td>{{ c.inspector.username }}</td>
+        <td>
+          {% if c.status == "CTQ_FAILED" %}<span class="pill pill-ctq"><i class="bi bi-lock-fill"></i> CTQ Failed</span>
+          {% elif c.status == "PENDING_REVIEW" %}<span class="pill pill-pending">Pending Review</span>
+          {% elif c.status == "APPROVED" %}<span class="pill pill-approved">Approved</span>
+          {% elif c.status == "CONCESSION" %}<span class="pill pill-concession">Concession</span>
+          {% elif c.status == "QUARANTINED" %}<span class="pill pill-quarantined">Quarantined</span>
+          {% else %}<span class="pill pill-draft">{{ c.get_status_display }}</span>{% endif %}
+        </td>
+        <td class="text-center">
+          {% if c.is_all_passed %}<span class="pill pill-pass">PASS</span>
+          {% else %}<span class="pill pill-fail">FAIL</span>{% if not c.ctq_passed %} <span class="pill pill-ctq-tag">CTQ</span>{% endif %}{% endif %}
+        </td>
+        <td class="small text-muted">{% if c.submitted_at %}{{ c.submitted_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+        <td class="text-end"><a class="btn btn-outline btn-sm" href="{% url 'inspections:checklist_detail' c.pk %}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-clipboard-check"></i>
+  <h3>No checklists yet</h3>
+  <p>Start a new inspection to record measurements.</p>
+  {% if can_inspect %}<a class="btn btn-primary" href="{% url 'inspections:inspection_create' %}"><i class="bi bi-plus-lg"></i> New Inspection</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

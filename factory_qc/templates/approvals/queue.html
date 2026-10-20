@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Review Queue — FactoryQC{% endblock %}
+{% block page_title %}Review Queue{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline btn-sm" href="{% url 'approvals:quarantine_list' %}"><i class="bi bi-exclamation-octagon"></i> Quarantine</a>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Supervisor Review Queue</h1>
+    <p class="subtitle">Checklists awaiting decision (Pending Review & CTQ Failed)</p>
+  </div>
+</div>
+
+<form method="get" class="filters-bar">
+  <div style="flex:1;min-width:160px;">
+    <label class="form-label">Machine</label>
+    <select name="machine" class="form-select">
+      <option value="">All machines</option>
+      {% for m in machines %}
+      <option value="{{ m.id }}" {% if selected_machine == m.id|stringformat:"s" %}selected{% endif %}>{{ m.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="min-width:140px;">
+    <label class="form-label">From</label>
+    <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+  </div>
+  <div style="min-width:140px;">
+    <label class="form-label">To</label>
+    <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+  </div>
+  <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i> Filter</button>
+  <a href="{% url 'approvals:queue' %}" class="btn btn-outline">Clear</a>
+</form>
+
+{% if checklists %}
+<div class="fq-table-wrap">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Job No</th>
+        <th>Part / Template</th>
+        <th>Machine</th>
+        <th>Inspector</th>
+        <th>Submitted</th>
+        <th class="text-center">Status</th>
+        <th class="text-center">Failed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cl in checklists %}
+      <tr>
+        <td class="fw-bold font-mono">{{ cl.job_no }}</td>
+        <td>
+          <div class="fw-semibold">{{ cl.template.part.part_no }}</div>
+          <small class="text-muted">{{ cl.template.name }} ({{ cl.template.revision }})</small>
+        </td>
+        <td>{{ cl.machine.name }}</td>
+        <td>{{ cl.inspector.username }}</td>
+        <td class="small text-muted">{% if cl.submitted_at %}{{ cl.submitted_at|date:"d M Y H:i" }}{% else %}—{% endif %}</td>
+        <td class="text-center">
+          {% if cl.status == "PENDING_REVIEW" %}<span class="pill pill-pending">Pending Review</span>
+          {% elif cl.status == "CTQ_FAILED" %}<span class="pill pill-ctq"><i class="bi bi-lock-fill"></i> CTQ Failed</span>{% endif %}
+        </td>
+        <td class="text-center">
+          {% if cl.failed_count > 0 %}<span class="pill pill-fail">{{ cl.failed_count }}</span>
+          {% else %}<span class="pill pill-pass">0</span>{% endif %}
+        </td>
+        <td class="text-end"><a class="btn btn-primary btn-sm" href="{% url 'approvals:detail' cl.pk %}">Review <i class="bi bi-arrow-right"></i></a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if is_paginated %}
+<nav class="mt-3 d-flex justify-content-center gap-2">
+  {% if page_obj.has_previous %}<a class="btn btn-outline btn-sm" href="?page={{ page_obj.previous_page_number }}&machine={{ selected_machine }}&date_from={{ date_from }}&date_to={{ date_to }}">« Prev</a>{% endif %}
+  <span class="btn btn-outline btn-sm disabled">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="btn btn-outline btn-sm" href="?page={{ page_obj.next_page_number }}&machine={{ selected_machine }}&date_from={{ date_from }}&date_to={{ date_to }}">Next »</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-check2-all" style="color:var(--pass);"></i>
+  <h3>All clear</h3>
+  <p>No checklists are currently awaiting review.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}{{ checklist.job_no }} — FactoryQC{% endblock %}
+{% block page_title %}Inspection Report{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-11">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <div class="d-flex align-items-center gap-2">
+          <h1 class="mb-0" style="font-size:1.5rem;font-weight:800;">Inspection Report: {{ checklist.job_no }}</h1>
+          <span class="pill pill-draft">Read-Only (Submitted)</span>
+        </div>
+        <p class="text-muted small mb-0">Submitted on {{ checklist.submitted_at|date:"Y-m-d H:i:s" }}</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline" href="{% url 'inspections:checklist_list' %}">← Checklists</a>
+        {% if can_inspect %}<a class="btn btn-primary" href="{% url 'inspections:inspection_create' %}">+ New Inspection</a>{% endif %}
+      </div>
+    </div>
+
+    <!-- Overall Outcome Banner -->
+    {% if checklist.status == "CTQ_FAILED" %}
+    <div class="alert alert-danger d-flex align-items-center justify-content-between p-3 mb-4 shadow-sm border border-danger">
+      <div class="d-flex align-items-center">
+        <span class="display-6 me-3">🚨</span>
+        <div>
+          <h4 class="alert-heading mb-1 fw-bold">CRITICAL QUALITY FAILURE — FROZEN (CTQ FAILED)</h4>
+          <div>One or more Critical-To-Quality (CTQ) characteristics failed specifications. Checklist is <strong>FROZEN</strong>. Quality Head has been alerted via email.</div>
+        </div>
+      </div>
+      <span class="badge bg-danger fs-5 px-3 py-2">CTQ FAILED (FROZEN)</span>
+    </div>
+    {% elif checklist.is_all_passed %}
+    <div class="alert alert-success d-flex align-items-center justify-content-between p-3 mb-4 shadow-sm">
+      <div class="d-flex align-items-center">
+        <span class="display-6 me-3">✓</span>
+        <div>
+          <h4 class="alert-heading mb-1">CONFORMING PRODUCT (PASS)</h4>
+          <div class="small">All {{ checklist.measurements.count }} characteristics met tolerance specifications.</div>
+        </div>
+      </div>
+      <span class="badge bg-warning text-dark fs-5 px-3 py-2">PENDING REVIEW</span>
+    </div>
+    {% else %}
+    <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 mb-4 shadow-sm">
+      <div class="d-flex align-items-center">
+        <span class="display-6 me-3">⚠</span>
+        <div>
+          <h4 class="alert-heading mb-1">NON-CONFORMING PRODUCT (DEVIATIONS DETECTED)</h4>
+          <div class="small">Minor non-CTQ characteristics deviated from tolerance. Required defect photos captured.</div>
+        </div>
+      </div>
+      <span class="badge bg-warning text-dark fs-5 px-3 py-2">PENDING REVIEW</span>
+    </div>
+    {% endif %}
+
+    <!-- Meta Details Card -->
+    <div class="fq-card mb-4">
+      <div class="fq-card-header py-3">
+        <h5 class="card-title mb-0">Inspection Metadata</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Job Number</div>
+            <div class="fw-bold">{{ checklist.job_no }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Part Number</div>
+            <div class="fw-bold">{{ checklist.template.part.part_no }}</div>
+            <div class="text-muted small">{{ checklist.template.part.description }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Template & Revision</div>
+            <div class="fw-bold">{{ checklist.template.name }} <span class="pill pill-draft">{{ checklist.template.revision }}</span></div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Machine</div>
+            <div class="fw-bold">{{ checklist.machine.name }}</div>
+            <div class="text-muted small">{{ checklist.machine.factory.name }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Inspector</div>
+            <div class="fw-bold">{{ checklist.inspector.username }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Submission Timestamp</div>
+            <div class="fw-bold">{{ checklist.submitted_at|date:"Y-m-d H:i:s" }}</div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Workflow Status</div>
+            <div>
+              {% if checklist.status == "CTQ_FAILED" %}
+                <span class="pill pill-fail">CTQ Failed (Frozen)</span>
+              {% elif checklist.status == "PENDING_REVIEW" %}
+                <span class="pill pill-pending">Pending Review</span>
+              {% elif checklist.status == "APPROVED" %}
+                <span class="pill pill-pass">Approved</span>
+              {% elif checklist.status == "CONCESSION" %}
+                <span class="badge bg-info text-dark">Concession</span>
+              {% elif checklist.status == "QUARANTINED" %}
+                <span class="pill pill-draft">Quarantined</span>
+              {% else %}
+                <span class="pill pill-draft">{{ checklist.get_status_display }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <div class="text-muted small">Inspector Permission</div>
+            <div><span class="badge bg-light text-dark border">Read-Only</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Measurements Table -->
+    <div class="fq-card mb-4">
+      <div class="fq-card-header py-3">
+        <h5 class="card-title mb-0">Measured Characteristics ({{ measurements|length }})</h5>
+      </div>
+      <div class="fq-table-wrap">
+        <table class="fq-table measurements-table with-order align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th >#</th>
+              <th >Characteristic</th>
+              <th >Type</th>
+              <th >Expected</th>
+              <th >Measured</th>
+              <th  class="text-center">Result</th>
+              <th >Gauge</th>
+              <th >Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in measurements %}
+            <tr class="{% if not m.is_within_tolerance %}table-danger{% endif %}">
+              <td class="text-muted small">{{ m.field.order }}</td>
+              <td style="word-wrap:break-word;overflow-wrap:anywhere;">
+                <span class="fw-bold">{{ m.field.name }}</span>
+                {% if m.field.is_ctq %}
+                  <span class="badge ms-1" style="background-color:#fd7e14;color:white;font-weight:600;" title="Critical To Quality">CTQ</span>
+                {% endif %}
+              </td>
+              <td><span class="badge bg-light text-dark border small">{{ m.field.get_field_type_display }}</span></td>
+              <td class="col-expected">
+                <span class="pill pill-range">{{ m.field.expected_range }}</span>
+              </td>
+              <td style="word-wrap:break-word;">
+                {% if m.field.field_type == "VISUAL" %}
+                  {% if m.visual_ok %}<span class="text-success fw-bold">Yes</span>{% else %}<span class="text-danger fw-bold">No</span>{% endif %}
+                {% else %}
+                  <strong class="font-monospace">{{ m.value }}</strong>{% if m.field.unit %} <span class="small text-muted">{{ m.field.unit }}</span>{% endif %}
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if m.is_within_tolerance %}<span class="badge bg-success">PASS</span>{% else %}<span class="badge bg-danger">FAIL</span>{% endif %}
+              </td>
+              <td class="small" style="word-wrap:break-word;">
+                {% if m.gauge %}{{ m.gauge.serial_no }}{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td class="small" style="word-wrap:break-word;">
+                <div>{{ m.remarks|default:"—" }}</div>
+                {% if m.photos.all %}
+                <a href="#defect-photos-card" class="pill pill-fail mt-1" style="display:inline-block;text-decoration:none;font-size:0.75rem;">
+                  {{ m.photos.count }} photo{{ m.photos.count|pluralize }}
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# One Defect Photos card below the table (hidden via :has when empty) #}
+    <div class="fq-card mb-4" id="defect-photos-card">
+      <div class="fq-card-header py-3">
+        <h5 class="card-title mb-0"><i class="bi bi-camera"></i> Defect Photos</h5>
+      </div>
+      <div class="p-3">
+        {% for m in measurements %}
+          {% if m.photos.all %}
+          <div class="defect-photo-group mb-4">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="fw-semibold">{{ m.field.name }}</span>
+              <span class="pill pill-fail">FAIL</span>
+            </div>
+            <div class="d-flex flex-wrap gap-3">
+              {% for photo in m.photos.all %}
+              <div class="text-center">
+                <a href="{{ photo.image.url }}" target="_blank" rel="noopener" title="Open full photo">
+                  <img src="{{ photo.image.url }}" alt="Photo {{ forloop.counter }}"
+                       style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;display:block;">
+                </a>
+                <div class="small text-muted mt-1">Photo {{ forloop.counter }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <style>#defect-photos-card:not(:has(.defect-photo-group)){display:none!important;}</style>
+  </div>
+</div>
+{% endblock %}

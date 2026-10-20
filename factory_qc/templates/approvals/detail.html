@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Review {{ checklist.job_no }} — FactoryQC{% endblock %}
+{% block page_title %}Inspection Review{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline btn-sm" href="{% url 'approvals:queue' %}"><i class="bi bi-arrow-left"></i> Queue</a>
+{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1>Job <span class="font-mono">{{ checklist.job_no }}</span></h1>
+    <p class="subtitle">{{ checklist.template.part.part_no }} · {{ checklist.template.name }} ({{ checklist.template.revision }}) · {{ checklist.machine.name }}</p>
+  </div>
+  <div>
+    {% if checklist.status == "PENDING_REVIEW" %}<span class="pill pill-pending">Pending Review</span>
+    {% elif checklist.status == "APPROVED" %}<span class="pill pill-approved">Approved</span>
+    {% elif checklist.status == "CTQ_FAILED" %}<span class="pill pill-ctq"><i class="bi bi-lock-fill"></i> CTQ Failed</span>
+    {% elif checklist.status == "QUARANTINED" %}<span class="pill pill-quarantined">Quarantined</span>
+    {% elif checklist.status == "CONCESSION" %}<span class="pill pill-concession">Concession</span>
+    {% else %}<span class="pill pill-draft">{{ checklist.status }}</span>{% endif %}
+  </div>
+</div>
+
+{% if checklist.status == "APPROVED" %}
+<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i><div><strong>Approved</strong> — this lot has been accepted.</div></div>
+{% elif checklist.status == "CTQ_FAILED" %}
+<div class="alert alert-danger"><i class="bi bi-lock-fill"></i><div><strong>CTQ Failed (Frozen)</strong> — A critical characteristic failed. Only Quarantine is allowed.</div></div>
+{% elif checklist.status == "QUARANTINED" %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-octagon-fill"></i><div><strong>Quarantined</strong> — held in the rejection holding area.</div></div>
+{% elif checklist.status == "CONCESSION" %}
+<div class="alert alert-info"><i class="bi bi-hand-thumbs-up-fill"></i><div><strong>Conditional Concession</strong>
+  {% with log=checklist.approval_logs.last %}{% if log %} · {{ log.get_reason_code_display }} · <em>{{ log.justification }}</em>{% endif %}{% endwith %}
+</div></div>
+{% endif %}
+
+<div class="review-grid">
+  <div>
+    <div class="fq-card mb-4">
+      <div class="fq-card-header">
+        <h2 class="fq-card-title">Checklist Info</h2>
+      </div>
+      <div class="row g-3">
+        <div class="col-6 col-md-3"><div class="small text-muted">Inspector</div><div class="fw-semibold">{{ checklist.inspector.username }}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Submitted</div><div class="fw-semibold">{% if checklist.submitted_at %}{{ checklist.submitted_at|date:"d M Y H:i" }}{% else %}—{% endif %}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Machine</div><div class="fw-semibold">{{ checklist.machine.name }}</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Template</div><div class="fw-semibold">{{ checklist.template.revision }}</div></div>
+      </div>
+    </div>
+
+    <div class="fq-table-wrap mb-4">
+      <table class="fq-table measurements-table">
+        <thead>
+          <tr>
+            <th >Characteristic</th>
+            <th >Expected</th>
+            <th >Measured</th>
+            <th  class="text-center">Result</th>
+            <th >Gauge</th>
+            <th >Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in checklist.measurements.all %}
+          <tr class="{% if m.is_within_tolerance %}row-pass{% else %}row-fail{% endif %}">
+            <td style="word-wrap:break-word;overflow-wrap:anywhere;">
+              <span class="fw-semibold">{{ m.field.name }}</span>
+              {% if m.field.is_ctq %}<span class="pill pill-ctq-tag">CTQ</span>{% endif %}
+            </td>
+            <td class="col-expected"><span class="pill pill-range">{{ m.field.expected_range }}</span></td>
+            <td style="word-wrap:break-word;">
+              {% if m.field.field_type == "VISUAL" %}
+                {% if m.visual_ok %}<span class="fw-bold" style="color:var(--pass)">Yes</span>{% else %}<span class="fw-bold" style="color:var(--fail)">No</span>{% endif %}
+              {% else %}
+                <span class="fw-bold font-mono" style="color:{% if m.is_within_tolerance %}var(--pass){% else %}var(--fail){% endif %}">
+                  {{ m.value }}{% if m.field.unit %} {{ m.field.unit }}{% endif %}
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if m.is_within_tolerance %}<span class="pill pill-pass">PASS</span>
+              {% else %}<span class="pill pill-fail">FAIL</span>{% endif %}
+            </td>
+            <td class="small" style="word-wrap:break-word;">
+              {% if m.gauge %}
+                {{ m.gauge.serial_no }}
+                {% if not m.gauge.is_calibration_valid %}<span class="pill pill-expired">EXPIRED</span>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="small" style="word-wrap:break-word;">
+              <div>{{ m.remarks|default:"—" }}</div>
+              {% if m.photos.all %}
+              <a href="#defect-photos-card" class="pill pill-fail mt-1" style="display:inline-block;text-decoration:none;font-size:0.75rem;">
+                {{ m.photos.count }} photo{{ m.photos.count|pluralize }}
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# One Defect Photos card — click opens existing modal #}
+    <div class="fq-card mb-4" id="defect-photos-card">
+      <div class="fq-card-header">
+        <h2 class="fq-card-title"><i class="bi bi-camera"></i> Defect Photos</h2>
+      </div>
+      <div class="p-3">
+        {% for m in checklist.measurements.all %}
+          {% if m.photos.all %}
+          <div class="defect-photo-group mb-4">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="fw-semibold">{{ m.field.name }}</span>
+              <span class="pill pill-fail">FAIL</span>
+            </div>
+            <div class="d-flex flex-wrap gap-3">
+              {% for photo in m.photos.all %}
+              <div class="text-center">
+                <img src="{{ photo.image.url }}" alt="Photo {{ forloop.counter }}"
+                     class="photo-thumb"
+                     style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;display:block;cursor:pointer;"
+                     data-bs-toggle="modal" data-bs-target="#photoModal"
+                     onclick="document.getElementById('modalPhoto').src=this.src">
+                <div class="small text-muted mt-1">Photo {{ forloop.counter }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <style>#defect-photos-card:not(:has(.defect-photo-group)){display:none!important;}</style>
+
+    {% if approval_logs %}
+    <div class="fq-card">
+      <div class="fq-card-header"><h2 class="fq-card-title">Approval History</h2></div>
+      <ul class="timeline">
+        {% for log in approval_logs %}
+        <li class="timeline-item">
+          <span class="timeline-dot {% if log.to_status == 'APPROVED' %}success{% elif log.to_status == 'QUARANTINED' %}danger{% elif log.to_status == 'CONCESSION' %}info{% else %}{% endif %}"></span>
+          <div class="fw-semibold">{{ log.from_status }} → {{ log.to_status }}</div>
+          <div class="small text-muted">{{ log.timestamp|date:"d M Y H:i" }} · by {{ log.action_by.username }}</div>
+          {% if log.reason_code %}<div class="small mt-1">{{ log.get_reason_code_display }}{% if log.justification %} — {{ log.justification }}{% endif %}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    {% if can_approve or can_quarantine or can_concession %}
+    <div class="fq-card action-panel">
+      <div class="fq-card-header"><h2 class="fq-card-title">Decision</h2></div>
+
+      {% if can_approve %}
+      <form method="post" action="{% url 'approvals:approve' checklist.pk %}" class="mb-3">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success btn-block btn-lg"
+                onclick="return confirm('Approve this checklist? This cannot be undone.')">
+          <i class="bi bi-check-lg"></i> Approve
+        </button>
+      </form>
+      {% endif %}
+
+      {% if can_concession %}
+      <button type="button" class="btn btn-orange btn-block btn-lg mb-3" data-bs-toggle="modal" data-bs-target="#concessionModal">
+        <i class="bi bi-hand-thumbs-up"></i> Concession
+      </button>
+      {% elif can_approve or can_quarantine %}
+      {# Show disabled concession when CTQ failed or no failures #}
+      {% if checklist.has_any_ctq_failure %}
+      <button type="button" class="btn btn-orange btn-block btn-lg mb-3 disabled" title="Concession blocked: a CTQ field failed" disabled>
+        <i class="bi bi-hand-thumbs-up"></i> Concession
+      </button>
+      <div class="small text-muted mb-3"><i class="bi bi-info-circle"></i> Concession is blocked when a CTQ field has failed.</div>
+      {% endif %}
+      {% endif %}
+
+      {% if can_quarantine %}
+      <form method="post" action="{% url 'approvals:quarantine' checklist.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-block btn-lg"
+                onclick="return confirm('Send this checklist to Quarantine?')">
+          <i class="bi bi-exclamation-octagon"></i> Quarantine
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# Concession modal #}
+{% if can_concession %}
+<div class="modal fade" id="concessionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'approvals:concession' checklist.pk %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">Grant Conditional Concession</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Reason Code <span style="color:var(--fail)">*</span></label>
+            <select name="reason_code" class="form-select" required>
+              <option value="">— Select reason —</option>
+              {% for code, label in reason_codes %}
+              <option value="{{ code }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Justification <span style="color:var(--fail)">*</span></label>
+            <textarea name="justification" class="form-control" rows="3" required placeholder="Why is this concession acceptable?"></textarea>
+          </div>
+          <div class="alert alert-warning mb-0">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div class="small">Concession is conditional acceptance. Only allowed when some fields failed and no CTQ failed. Permanently recorded.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-orange" onclick="return confirm('Grant concession? This cannot be undone.')">Confirm Concession</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# Photo enlarge modal #}
+<div class="modal fade" id="photoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Defect Photo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="modalPhoto" src="" alt="Defect" style="max-width:100%;border-radius:8px;">
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

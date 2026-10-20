@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Login — FactoryQC{% endblock %}
+{% block auth_content %}
+<div class="auth-body">
+  <div class="auth-card">
+    <div class="text-center mb-4">
+      <div class="logo-mark mx-auto mb-3" style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#3B82F6,#1D4ED8);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:18px;">FQ</div>
+      <h1 style="font-size:1.5rem;font-weight:800;letter-spacing:-0.03em;margin:0 0 4px;">FactoryQC</h1>
+      <p class="text-muted small mb-0">Shopfloor Quality Control System</p>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      {% if form.errors %}
+      <div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill"></i><div>Wrong username or password.</div></div>
+      {% endif %}
+      <div class="mb-3">
+        <label class="form-label" for="id_username">Username</label>
+        <input class="form-control" type="text" name="username" id="id_username" autofocus required autocomplete="username" placeholder="Enter username">
+      </div>
+      <div class="mb-4">
+        <label class="form-label" for="id_password">Password</label>
+        <input class="form-control" type="password" name="password" id="id_password" required autocomplete="current-password" placeholder="Enter password">
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+    </form>
+    <div class="mt-4 p-3" style="background:#F8FAFC;border-radius:10px;border:1px solid var(--border);">
+      <div class="small fw-semibold mb-2" style="color:var(--muted);"><i class="bi bi-info-circle"></i> Demo credentials</div>
+      <div class="small font-mono" style="line-height:1.7;color:var(--text);">
+        engineer1 / demo1234<br>
+        inspector1 / demo1234<br>
+        supervisor1 / demo1234<br>
+        admin / demo1234
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

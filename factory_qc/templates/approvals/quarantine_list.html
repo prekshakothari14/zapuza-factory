@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Quarantine — FactoryQC{% endblock %}
+{% block page_title %}Quarantine Holding Area{% endblock %}
+{% block topbar_actions %}
+<a class="btn btn-outline btn-sm" href="{% url 'approvals:queue' %}"><i class="bi bi-inbox"></i> Review Queue</a>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 style="color:var(--fail);"><i class="bi bi-exclamation-octagon-fill"></i> Quarantine Holding Area</h1>
+    <p class="subtitle">Lots quarantined and pending disposition</p>
+  </div>
+</div>
+
+{% if checklists %}
+<div class="fq-table-wrap" style="border-color:#FECACA;">
+  <table class="fq-table">
+    <thead>
+      <tr>
+        <th>Job No</th>
+        <th>Part / Template</th>
+        <th>Machine</th>
+        <th>Inspector</th>
+        <th>Submitted</th>
+        <th class="text-center">Failed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cl in checklists %}
+      <tr>
+        <td class="fw-bold font-mono">{{ cl.job_no }}</td>
+        <td>
+          <div class="fw-semibold">{{ cl.template.part.part_no }}</div>
+          <small class="text-muted">{{ cl.template.name }} ({{ cl.template.revision }})</small>
+        </td>
+        <td>{{ cl.machine.name }}</td>
+        <td>{{ cl.inspector.username }}</td>
+        <td class="small text-muted">{% if cl.submitted_at %}{{ cl.submitted_at|date:"d M Y H:i" }}{% else %}—{% endif %}</td>
+        <td class="text-center"><span class="pill pill-fail">{{ cl.failed_count|default:cl.failed_field_count }}</span></td>
+        <td class="text-end"><a class="btn btn-outline btn-sm" href="{% url 'approvals:detail' cl.pk %}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fq-card empty-state">
+  <i class="bi bi-shield-check" style="color:var(--pass);"></i>
+  <h3>Holding area empty</h3>
+  <p>No lots are currently in quarantine.</p>
+</div>
+{% endif %}
+{% endblock %}

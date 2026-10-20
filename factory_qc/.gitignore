@@ -1,0 +1,26 @@
+# Virtual environments
+.venv/
+venv/
+
+# Secrets & local DB
+.env
+db.sqlite3
+
+# Uploads & collected static
+media/
+staticfiles/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Packaging / IDE
+*.zip
+.idea/
+.vscode/
+*.egg-info/
+dist/
+build/
+
+

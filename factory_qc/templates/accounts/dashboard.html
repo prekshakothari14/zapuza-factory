@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ role }} Dashboard — FactoryQC{% endblock %}
+{% block page_title %}{{ role }} Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ role }} Dashboard</h1>
+    <p class="subtitle">Overview of quality operations</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  {% for c in cards %}
+  <div class="stat-card">
+    {% if c.url %}<a class="stretched" href="{% url c.url %}" aria-label="{{ c.label }}"></a>{% endif %}
+    <div class="stat-icon {% if c.style == 'success' %}green{% elif c.style == 'danger' %}red{% elif c.style == 'warning' %}amber{% elif c.style == 'info' %}cyan{% else %}blue{% endif %}">
+      <i class="bi bi-{% if 'Machine' in c.label %}gear-wide-connected{% elif 'Part' in c.label %}box-seam{% elif 'Template' in c.label or 'Approved' in c.label %}file-earmark-text{% elif 'Gauge' in c.label or 'Expired' in c.label or 'Expiring' in c.label %}rulers{% elif 'Pending' in c.label %}hourglass-split{% elif 'Quarant' in c.label %}exclamation-octagon{% elif 'Concession' in c.label %}hand-thumbs-up{% elif 'Approved' in c.label %}check-circle{% elif 'Inspection' in c.label or 'Checklist' in c.label %}clipboard-check{% else %}bar-chart{% endif %}"></i>
+    </div>
+    <div class="stat-label">{{ c.label }}</div>
+    <div class="stat-value">{{ c.value }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

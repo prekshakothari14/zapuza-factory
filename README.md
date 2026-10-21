@@ -6,7 +6,7 @@ A Django web app that replaces paper inspection sheets with a digital quality-co
 
 ## 🎥 Demo Video
 
-> **Video link:** [LINK](https://drive.google.com/file/d/1iUhCPtK-Kbb_UyGuOlrb8MG6-ehdEtJC/view?usp=sharing)
+> **Video link:** [LINK](https://drive.google.com/file/d/1fC1JWiGPtNIVzhFYgrUm_DgvP1jffjUw/view?usp=sharing)
 
 ---
 
